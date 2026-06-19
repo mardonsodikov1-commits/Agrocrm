@@ -80,6 +80,12 @@ class Farm(Base):
         back_populates="farm",
         cascade="all, delete-orphan",
     )
+    finance_transactions: Mapped[List["FinanceTransaction"]] = relationship(
+        "FinanceTransaction",
+        back_populates="farm",
+        cascade="all, delete-orphan",
+        foreign_keys="FinanceTransaction.farm_id",
+    )
 
     def __repr__(self) -> str:
         return f"<Farm(id={self.id}, name={self.name}, region={self.region})>"
