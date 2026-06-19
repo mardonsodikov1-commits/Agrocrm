@@ -16,6 +16,7 @@ Production-ready FastAPI backend for smart farm management with AI-powered featu
 2. **AI Assistant** - Intent classification → backend analytics → LLM response (Uzbek)
 3. **Analytics** - Cost/profit calculations, trends, inventory summary
 4. **Alerts** - Milk drop detection, feed shortage, expiry warnings (Celery Beat 06:00)
+5. **Finance** - Income/expense transactions, category breakdown, period-based summary. Analytics revenue/expense now prefer real recorded transactions and fall back to estimates only when none exist.
 
 ## Quick Start
 
@@ -56,6 +57,8 @@ celery -A app.core.celery_app beat --loglevel=info
 | Animals | `POST /api/v1/farms/{id}/animals` | Hayvon qo'shish |
 | Inventory | `POST /api/v1/farms/{id}/inventory` | Inventar qo'shish |
 | Production | `POST /api/v1/farms/{id}/production` | Ishlab chiqarish yozuvi |
+| Finance | `POST /api/v1/farms/{id}/finance/transactions` | Daromad/xarajat qo'shish |
+| Finance | `GET /api/v1/farms/{id}/finance/summary` | Daromad-xarajat hisoboti |
 | AI Parser | `POST /api/v1/ai/entries/parse` | Matnni tahlil qilish |
 | AI Parser | `POST /api/v1/ai/entries/{id}/commit` | Tasdiqlash va yozish |
 | AI Assistant | `POST /api/v1/ai/assistant/ask` | Savol berish |

@@ -11,6 +11,7 @@ from app.models.inventory import InventoryItem
 from app.models.production import ProductionRecord
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.production_repo import ProductionRepository
+from app.repositories.finance_repo import FinanceRepository
 
 
 class AnalyticsService:
@@ -19,6 +20,21 @@ class AnalyticsService:
         self.farm_id = farm_id
         self.prod_repo = ProductionRepository(session)
         self.inv_repo = InventoryRepository(session)
+        self.finance_repo = FinanceRepository(session)
+
+    def _period_bounds(self, time_period: str) -> tuple[datetime, datetime]:
+        today = datetime.now(timezone.utc)
+        if time_period == "today":
+            date_from = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_period == "this_week":
+            date_from = (today - timedelta(days=today.weekday())).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        elif time_period == "this_year":
+            date_from = today.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            date_from = today - timedelta(days=30)
+        return date_from, today
 
     async def calculate_profit_by_animal(
         self,
@@ -252,6 +268,25 @@ class AnalyticsService:
         elif time_period == "this_year":
             date_from = today.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
+        date_from, date_to = self._period_bounds(time_period)
+
+        # Prefer real recorded finance transactions when available.
+        recorded_expense = await self.finance_repo.get_total_by_type(
+            self.farm_id, "expense", date_from, date_to
+        )
+        if recorded_expense > 0:
+            breakdown = await self.finance_repo.get_breakdown_by_category(
+                self.farm_id, "expense", date_from, date_to
+            )
+            return {
+                "total_estimated_expenses": float(recorded_expense),
+                "total_expenses": float(recorded_expense),
+                "by_category": breakdown,
+                "source": "finance_transactions",
+                "period": time_period,
+            }
+
+        # Fallback estimate from inventory value + labor heuristic.
         inventory_items = await self.inv_repo.get_items_by_farm(self.farm_id)
         total_inventory_value = Decimal("0")
         for item in inventory_items:
@@ -270,6 +305,8 @@ class AnalyticsService:
             "inventory_cost": float(total_inventory_value),
             "estimated_labor_cost": float(estimated_labor),
             "total_estimated_expenses": float(total_inventory_value + estimated_labor),
+            "total_expenses": float(total_inventory_value + estimated_labor),
+            "source": "estimate",
             "period": time_period,
         }
 
@@ -304,6 +341,24 @@ class AnalyticsService:
             date_to=today,
         )
 
+        # Prefer real recorded sales income when available.
+        recorded_income = await self.finance_repo.get_total_by_type(
+            self.farm_id, "income", date_from, today
+        )
+        if recorded_income > 0:
+            breakdown = await self.finance_repo.get_breakdown_by_category(
+                self.farm_id, "income", date_from, today
+            )
+            return {
+                "total_revenue": float(recorded_income),
+                "by_category": breakdown,
+                "milk_liters": float(total_milk),
+                "egg_pieces": float(total_eggs),
+                "source": "finance_transactions",
+                "period": time_period,
+            }
+
+        # Fallback estimate using indicative market prices.
         milk_revenue = total_milk * Decimal("5000")
         egg_revenue = total_eggs * Decimal("800")
 
@@ -313,6 +368,7 @@ class AnalyticsService:
             "total_revenue": float(milk_revenue + egg_revenue),
             "milk_liters": float(total_milk),
             "egg_pieces": float(total_eggs),
+            "source": "estimate",
             "period": time_period,
         }
 
